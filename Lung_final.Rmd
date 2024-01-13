@@ -1,0 +1,290 @@
+---
+title: "Lung Cancer Analysis"
+output: html_document
+date: "2023-04-17"
+---
+# PCA
+```{r}
+library(readr)
+cancer <- read_csv("C:/Users/vidhi/Downloads/LUNGCANCER3.csv")
+str(cancer)
+attach(cancer)
+
+#Load packages
+library(lattice)
+library(ggplot2)
+library(ggridges)
+library(ggvis)
+library(ggthemes)
+library(cowplot)
+library(gapminder)
+library(gganimate)
+library(dplyr)
+library(tidyverse)
+library(grid)
+library(gridExtra)
+library(RColorBrewer)
+
+# Using prcomp to compute the principal components (eigenvalues and eigenvectors). With scale=TRUE, variable means are set to zero, and variances set to one
+cancer_pca <- prcomp(cancer[,-1],scale=TRUE)
+
+summary(cancer_pca)
+#* Standard deviation: The standard deviation indicates how much of the variance in the original data is captured by each principal component. The first principal component (PC1) has the highest standard deviation of 1.6925, which means it accounts for the most variation in the original data. As we move down the list of principal components, the standard deviation decreases, indicating that each subsequent component captures less and less of the overall variation.
+
+#* Proportion of variance: The proportion of variance indicates the amount of variance in the original data that is explained by each principal component. For example, the first principal component (PC1) explains 16.85% of the total variance in the data, while the second component (PC2) explains an additional 11.52% of the variance. As we move down the list of principal components, the proportion of variance explained by each component tends to decrease.
+
+#* Cumulative proportion: The cumulative proportion indicates the total amount of variance in the data that is explained by each principal component and all of the preceding components. For example, the first principal component (PC1) captures 16.85% of the variance in the data, while PC1 and PC2 together capture 28.37% of the variance. The cumulative proportion can be useful in determining how many principal components to retain for further analysis.
+
+
+# sample scores stored in cancer_pca$x
+# singular values (square roots of eigenvalues) stored in cancer_pca$sdev
+# loadings (eigenvectors) are stored in cancer_pca$rotation
+# variable means stored in cancer_pca$center
+# variable standard deviations stored in cancer_pca$scale
+# A table containing eigenvalues and %'s accounted, follows
+# Eigenvalues are sdev^2
+(eigen_cancer <- cancer_pca$sdev^2)
+
+names(eigen_cancer) <- paste("PC",1:17,sep="")
+
+sumlambdas <- sum(eigen_cancer)
+
+propvar <- eigen_cancer/sumlambdas
+cumvar_cancer <- cumsum(propvar)
+
+
+
+matlambdas <- rbind(eigen_cancer,propvar,cumvar_cancer)
+rownames(matlambdas) <- c("Eigenvalues","Prop. variance","Cum. prop. variance")
+round(matlambdas,4)
+
+summary(cancer_pca)
+print(cancer_pca)
+
+# Identifying the scores by their survival status
+cancerp_pca <- cbind(data.frame(LUNG_CANCER),cancer_pca$x)
+# Means of scores for all the PC's classified by Survival status
+tabmeansPC <- aggregate(cancerp_pca[,2:15],by=list(LUNG_CANCER=cancer$LUNG_CANCER),mean)
+
+tabmeansPC <- tabmeansPC[rev(order(tabmeansPC$LUNG_CANCER)),]
+
+tabfmeans <- t(tabmeansPC[,-1])
+
+colnames(tabfmeans) <- t(as.vector(tabmeansPC[1]$LUNG_CANCER))
+
+# Standard deviations of scores for all the PC's classified by Survival status
+tabsdsPC <- aggregate(cancerp_pca[,2:15],by=list(LUNG_CANCER=cancer$LUNG_CANCER),sd)
+tabfsds <- t(tabsdsPC[,-1])
+colnames(tabfsds) <- t(as.vector(tabsdsPC[1]$LUNG_CANCER))
+tabfsds
+t.test(PC1~cancer$LUNG_CANCER,data=cancerp_pca)
+t.test(PC2~cancer$LUNG_CANCER,data=cancerp_pca)
+t.test(PC3~cancer$LUNG_CANCER,data=cancerp_pca)
+t.test(PC4~cancer$LUNG_CANCER,data=cancerp_pca)
+t.test(PC5~cancer$LUNG_CANCER,data=cancerp_pca)
+# The output shows that the p-value is 0.07939, which is above the significance level of 0.05, indicating that we cannot reject the null hypothesis of no difference in means between the two groups at the 5% significance level for PC1. Similarly we can do this for other PC's as well. 
+
+plot(eigen_cancer, xlab = "Component number", ylab = "Component variance", type = "l", main = "Scree diagram")
+plot(log(eigen_cancer), xlab = "Component number",ylab = "log(Component variance)", type="l",main = "Log(eigenvalue) diagram")
+print(summary(cancer_pca))
+#The first three PCs (PC1, PC2, and PC3) account for a total of 38.5% of the variance in the data. The first seven PCs (PC1-PC7) together explain 66.5% of the variance, and the first 14 PCs explain 94.1% of the variance. Therefore, it appears that most of the variance in the data is captured by the first few PCs. The summary also indicates that the standard deviation of each PC decreases as the PC index increases. This means that the amount of variation explained by each PC decreases as the index increases. The proportion of variance and cumulative proportion of each PC follow a similar pattern.
+plot(cancer_pca)
+
+#get the original value of the data based on PCA
+center <- cancer_pca$center
+scale <- cancer_pca$scale
+new_cancer <- as.matrix(cancer[,-1])
+
+drop(scale(new_cancer,center=center, scale=scale)%*%cancer_pca$rotation[,1])
+predict(cancer_pca)[,1]
+#The aboved two gives us the same thing. predict is a good function to know.
+cancer$LUNG_CANCER <- as.factor(cancer$LUNG_CANCER)
+out <- sapply(1:5, function(i){plot(cancer$LUNG_CANCER,cancer_pca$x[,i],xlab=paste("PC",i,sep=""),ylab="LUNG CANCER")})
+
+library(factoextra)
+library(FactoMineR)
+library(ggfortify)
+library(psych)
+library(corrplot)
+library(devtools)
+
+fviz_eig(cancer_pca, addlabels = TRUE)
+
+```
+* Since PC1 and PC2 is not greater than or equal to 70%, we cannot perform principal component analysis.
+# EFA
+```{r}
+# Factor Analysis
+
+library(psych)
+library(readr)
+data <- read_csv("C:/Users/vidhi/Downloads/LUNGCANCER3.csv")
+
+attach(data)
+data[1]
+fit.pc <- fa(data[-1], nfactors=3, rotate="varimax")
+fit.pc
+round(fit.pc$values, 3)
+fit.pc$loadings
+#for (i in c(1,3,2,4,5,6,7)) { print(fit.pc$loadings[[1,i]])}
+# Communalities
+fit.pc$communality
+# Play with FA utilities
+
+fa.parallel(data[-1]) # See factor recommendation
+fa.plot(fit.pc) # See Correlations within Factors
+fa.diagram(fit.pc) # Visualize the relationship
+vss(data[-1]) # See Factor recommendations for a simple structure
+
+# Computing Correlation Matrix
+corrm.emp <- cor(data[-1])
+
+plot(corrm.emp)
+data_pca <- prcomp(data[-1], scale=TRUE)
+summary(data_pca)
+plot(data_pca)
+# A table containing eigenvalues and %'s accounted, follows. Eigenvalues are the sdev^2
+(eigen_data <- round(data_pca$sdev^2,3))
+round(fit.pc$values, 3)
+names(eigen_data) <- paste("PC",1:17,sep="")
+eigen_data
+sumlambdas <- sum(eigen_data)
+sumlambdas
+propvar <- round(eigen_data/sumlambdas,2)
+propvar
+cumvar_data <- cumsum(propvar)
+cumvar_data
+matlambdas <- rbind(eigen_data,propvar,cumvar_data)
+matlambdas
+rownames(matlambdas) <- c("Eigenvalues","Prop. variance","Cum. prop. variance")
+rownames(matlambdas)
+eigvec.emp <- data_pca$rotation
+
+# Taking the first four PCs to generate linear combinations for all the variables with four factors
+pcafactors.emp <- eigvec.emp[,1:7]
+
+# Multiplying each column of the eigenvector’s matrix by the square-root of the corresponding eigenvalue in order to get the factor loadings
+unrot.fact.emp <- sweep(pcafactors.emp,MARGIN=2,data_pca$sdev[1:7],`*`)
+
+# Computing communalities
+communalities.emp <- rowSums(unrot.fact.emp^2)
+
+# Performing the varimax rotation. The default in the varimax function is norm=TRUE thus, Kaiser normalization is carried out
+rot.fact.emp <- varimax(unrot.fact.emp)
+#View(unrot.fact.emp)
+rot.fact.emp
+# The print method of varimax omits loadings less than abs(0.1). In order to display all the loadings, it is necessary to ask explicitly the contents of the object $loadings
+fact.load.emp <- rot.fact.emp$loadings[1:17,1:7]
+
+# Computing the rotated factor scores for the 30 European Countries. Notice that signs are reversed for factors F2 (PC2), F3 (PC3) and F4 (PC4)
+scale.emp <- scale(data[-1])
+
+#as.matrix(scale.emp) %*% fact.load.emp %*% solve(t(fact.load.emp) %*% fact.load.emp + diag(ncol(fact.load.emp)))
+
+```
+
+# Logistic Regression
+```{r}
+library(readr)
+library(MVA)
+library(HSAUR2)
+library(SciViews)
+library(scatterplot3d)
+library(car)
+library(lattice)
+library(GGally)
+library(ggplot2)
+library(ggridges)
+library(ggvis)
+library(ggthemes)
+library(cowplot)
+library(gapminder)
+library(gganimate)
+library(dplyr)
+library(tidyverse)
+library(grid)
+library(gridExtra)
+library(RColorBrewer)
+library(Hotelling)
+library(stats)
+library(biotools)
+library(factoextra)
+library(FactoMineR)
+library(ggfortify)
+library(psych)
+library(corrplot)
+library(devtools)
+library(cluster)
+library(magrittr)
+library(NbClust)
+library(MASS)
+library(gvlma)
+library(leaps)
+library(relaimpo)
+library(e1071)
+library(pROC)
+library(memisc)
+library(ROCR)
+library(klaR)
+library(caret)
+library(caTools)
+cancer <- read_csv("C:/Users/vidhi/Downloads/LUNGCANCER3.csv")
+str(cancer)
+attach(cancer)
+
+set.seed(123)
+split = sample.split(cancer$LUNG_CANCER, SplitRatio = 0.80)
+train_lc = subset(cancer, split == TRUE)
+test_lc = subset(cancer, split == FALSE)
+
+Xtrain_lc <- train_lc[,-1]
+Ytrain_lc <- train_lc[,1]
+
+Xtest_lc <- test_lc[,-1]
+x_lc <- cbind(Xtrain_lc,Ytrain_lc)
+logistic_lc <- glm(LUNG_CANCER ~ ., data = x_lc,family='binomial')
+summary(logistic_lc)
+
+set.seed(1234) # for reproducibility
+probabilities_lc <- predict(logistic_lc, newdata = Xtest_lc, type = "response")
+
+predicted_lc <- ifelse(probabilities_lc > 0.5, "Yes", "No")
+actual_lc <- ifelse(test_lc$LUNG_CANCER == 1, "Yes", "No")
+
+# Confusion matrix
+conf_mat <- table(actual_lc, predicted_lc)
+conf_mat
+
+# Precision
+precision <- conf_mat[2, 2] / sum(conf_mat[, 2])
+precision
+
+# Recall
+recall <- conf_mat[2, 2] / sum(conf_mat[2, ])
+recall
+
+roc_lc <- roc(test_lc$LUNG_CANCER, probabilities_lc)
+auc_lc <- auc(roc_lc)
+auc_lc
+#  generating full multiple logistic regression 
+full_model <- glm(LUNG_CANCER ~ SMOKING + WHEEZING + COUGHING + ALCOHOL_CONSUMING, family = binomial(link = logit)) 
+summary(full_model)
+
+full_model1 <- glm(LUNG_CANCER ~ ANXIETY + PEER_PRESSURE, family = binomial(link = logit)) 
+summary(full_model)
+
+# exponentiate the confidence intervals around the log odds for each predictor variable to obtain the odds 
+exp(confint(full_model))
+
+
+ggroc(roc_lc, color = "blue", legacy.axes = TRUE) +
+  geom_abline(intercept = 0, slope = 1, linetype = "dashed") +
+  scale_x_continuous(labels = scales::percent_format()) +
+  scale_y_continuous(labels = scales::percent_format()) +
+  labs(x = "False Positive Rate", y = "True Positive Rate",
+       title = paste("ROC Curve (AUC = ", round(auc_lc, 2), ")")) +
+  annotate("text", x = 0.5, y = 0.5, label = paste0("AUC = ", round(auc_lc, 2)))
+
+
+```
+
